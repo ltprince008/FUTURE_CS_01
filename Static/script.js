@@ -1,16 +1,19 @@
 // script.js
 
-const backendURL = 'http://localhost:5000';
+// Deployment-safe backend URL
+const backendURL = window.location.hostname === "localhost"
+  ? "http://localhost:5000"
+  : window.location.origin; // automatically uses deployed site origin
 
 // Master key for HKDF-derived per-file keys (demo, in-memory)
 const masterKeyRaw = new TextEncoder().encode("SuperSecretMasterKey123!");
 let masterCryptoKey;
 let masterReady; // Promise that resolves when master key is imported
 
-// Persisted metadata (array of { fileName, iv: [..], salt: [..] })
+// Persisted metadata
 let encryptedFiles = JSON.parse(localStorage.getItem("encryptedFiles") || "[]");
 
-// Import master key for HKDF
+// Import master key
 async function importMasterKey() {
   masterCryptoKey = await crypto.subtle.importKey(
     "raw",
@@ -20,8 +23,8 @@ async function importMasterKey() {
     ["deriveKey"]
   );
 }
- 
-// Derive per-file key using HKDF (salt must be Uint8Array)
+
+// Derive per-file key
 async function deriveFileKey(fileName, salt) {
   const info = new TextEncoder().encode(fileName);
   return crypto.subtle.deriveKey(
@@ -33,7 +36,7 @@ async function deriveFileKey(fileName, salt) {
   );
 }
 
-// Encrypt file: returns { encrypted: ArrayBuffer, iv: Uint8Array, salt: Uint8Array, fileName }
+// Encrypt file
 async function encryptFile(file) {
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const key = await deriveFileKey(file.name, salt);
@@ -42,8 +45,8 @@ async function encryptFile(file) {
 
   const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, data);
 
-  // Update persistent metadata (store IV and salt as plain arrays)
-  encryptedFiles = encryptedFiles.filter(m => m.fileName !== file.name); // dedupe
+  // Update metadata
+  encryptedFiles = encryptedFiles.filter(m => m.fileName !== file.name);
   encryptedFiles.push({ fileName: file.name, iv: Array.from(iv), salt: Array.from(salt) });
   localStorage.setItem("encryptedFiles", JSON.stringify(encryptedFiles));
 
@@ -69,7 +72,6 @@ function addFileToTable(fileName, status) {
   `;
   fileList.appendChild(fileItem);
 
-  // Download should request the .enc file and then decrypt client-side
   fileItem.querySelector(".download").addEventListener("click", (e) => {
     e.preventDefault();
     downloadFile(fileName + ".enc");
@@ -81,7 +83,7 @@ function addFileToTable(fileName, status) {
   });
 }
 
-// Download + decrypt the .enc file, then trigger a save of original filename
+// Download + decrypt
 async function downloadFile(fileName) {
   try {
     const res = await fetch(`${backendURL}/download/${encodeURIComponent(fileName)}`);
@@ -94,19 +96,13 @@ async function downloadFile(fileName) {
     const stored = encryptedFiles.find(f => f.fileName === originalName);
     if (!stored) throw new Error("Encryption metadata not found for " + originalName);
 
-    // Ensure master key is ready
     await masterReady;
 
     const iv = new Uint8Array(stored.iv);
     const salt = new Uint8Array(stored.salt);
-
     const key = await deriveFileKey(stored.fileName, salt);
 
-    const decrypted = await crypto.subtle.decrypt(
-      { name: "AES-GCM", iv },
-      key,
-      encryptedBuffer
-    );
+    const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, encryptedBuffer);
 
     const originalBlob = new Blob([decrypted]);
     const a = document.createElement('a');
@@ -120,7 +116,7 @@ async function downloadFile(fileName) {
   }
 }
 
-// Delete file: remove metadata and tell server to delete .enc file
+// Delete file
 async function deleteFile(fileName, rowElement) {
   const originalName = fileName.replace(/\.enc$/i, "");
   encryptedFiles = encryptedFiles.filter(f => f.fileName !== originalName);
@@ -139,14 +135,13 @@ async function deleteFile(fileName, rowElement) {
   }
 }
 
-// Upload files: encrypt each file client-side, append encrypted Blob as .enc, then POST
+// Upload files
 document.getElementById("uploadBtn").addEventListener("click", () => {
   const input = document.createElement("input");
   input.type = "file";
   input.multiple = true;
 
   input.addEventListener("change", async () => {
-    // wait until master key is ready
     await masterReady;
 
     const formData = new FormData();
@@ -157,8 +152,6 @@ document.getElementById("uploadBtn").addEventListener("click", () => {
       try {
         const encryptedFile = await encryptFile(file);
         const encryptedBlob = new Blob([encryptedFile.encrypted], { type: "application/octet-stream" });
-
-        // append encrypted blob with .enc name
         formData.append('files', encryptedBlob, file.name + ".enc");
       } catch (err) {
         console.error("Encryption failed for", file.name, err);
@@ -168,17 +161,12 @@ document.getElementById("uploadBtn").addEventListener("click", () => {
 
     try {
       console.log('Uploading encrypted files to backend...');
-      const res = await fetch(`${backendURL}/upload`, {
-        method: 'POST',
-        body: formData
-      });
-
+      const res = await fetch(`${backendURL}/upload`, { method: 'POST', body: formData });
       if (!res.ok) throw new Error(`Upload failed. Status: ${res.status}`);
 
       const data = await res.json();
       console.log('Upload response data:', data);
 
-      // Update UI statuses for files that finished uploading
       if (Array.isArray(data.files)) {
         data.files.forEach(encName => {
           const originalName = encName.replace(/\.enc$/i, "");
@@ -204,7 +192,7 @@ document.getElementById("uploadBtn").addEventListener("click", () => {
   input.click();
 });
 
-// Login (unchanged)
+// Login
 document.getElementById("loginBtn").addEventListener("click", () => {
   const username = prompt("Enter username:");
   const password = prompt("Enter password:");
@@ -219,11 +207,10 @@ document.getElementById("loginBtn").addEventListener("click", () => {
   .catch(err => console.error('Login error:', err));
 });
 
-// Initialize master key and populate UI from localStorage
+// Initialize master key and populate UI
 masterReady = importMasterKey();
 masterReady
   .then(() => {
-    // show previously-uploaded (persisted metadata) files in UI
     for (const meta of encryptedFiles) {
       addFileToTable(meta.fileName, "Uploaded");
     }
