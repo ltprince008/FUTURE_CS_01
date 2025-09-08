@@ -2,11 +2,14 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
+const cors = require('cors'); // ✅ NEW
 
 const app = express();
 // new
 const port = process.env.PORT || 5000;
 
+// ✅ Enable CORS (fixes "Failed to fetch" on Render)
+app.use(cors());
 
 // Ensure uploads folder exists inside backend/
 const uploadDir = path.join(__dirname, 'uploads');
