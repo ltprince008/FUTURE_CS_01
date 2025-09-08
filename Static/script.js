@@ -1,18 +1,16 @@
 // script.js
 
 // Deployment-safe backend URL
-// Deployment-safe backend URL
-const backendURL = window.location.hostname === "localhost" 
-  ? "http://localhost:5000" 
+const backendURL = window.location.hostname === "localhost"
+  ? "http://localhost:5000"
   : "https://future-cs-01.onrender.com";
-// automatically uses deployed site origin
 
-// Master key for HKDF-derived per-file keys (demo, in-memory)
+// Master key for HKDF-derived per-file keys
 const masterKeyRaw = new TextEncoder().encode("SuperSecretMasterKey123!");
 let masterCryptoKey;
-let masterReady; // Promise that resolves when master key is imported
+let masterReady;
 
-// Persisted metadata
+// Persisted metadata: { fileName, iv, salt, storedName }
 let encryptedFiles = JSON.parse(localStorage.getItem("encryptedFiles") || "[]");
 
 // Import master key
@@ -47,11 +45,6 @@ async function encryptFile(file) {
 
   const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, data);
 
-  // Update metadata
-  encryptedFiles = encryptedFiles.filter(m => m.fileName !== file.name);
-  encryptedFiles.push({ fileName: file.name, iv: Array.from(iv), salt: Array.from(salt) });
-  localStorage.setItem("encryptedFiles", JSON.stringify(encryptedFiles));
-
   return { encrypted, iv, salt, fileName: file.name };
 }
 
@@ -76,65 +69,13 @@ function addFileToTable(fileName, status) {
 
   fileItem.querySelector(".download").addEventListener("click", (e) => {
     e.preventDefault();
-    downloadFile(fileName + ".enc");
+    downloadFile(fileName);
   });
 
   fileItem.querySelector(".delete").addEventListener("click", (e) => {
     e.preventDefault();
-    deleteFile(fileName + ".enc", fileItem);
+    deleteFile(fileName, fileItem);
   });
-}
-
-// Download + decrypt
-async function downloadFile(fileName) {
-  try {
-    const res = await fetch(`${backendURL}/download/${encodeURIComponent(fileName)}`);
-    if (!res.ok) throw new Error('File not found on server');
-
-    const encryptedBlob = await res.blob();
-    const encryptedBuffer = await encryptedBlob.arrayBuffer();
-
-    const originalName = fileName.replace(/\.enc$/i, "");
-    const stored = encryptedFiles.find(f => f.fileName === originalName);
-    if (!stored) throw new Error("Encryption metadata not found for " + originalName);
-
-    await masterReady;
-
-    const iv = new Uint8Array(stored.iv);
-    const salt = new Uint8Array(stored.salt);
-    const key = await deriveFileKey(stored.fileName, salt);
-
-    const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, encryptedBuffer);
-
-    const originalBlob = new Blob([decrypted]);
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(originalBlob);
-    a.download = stored.fileName;
-    a.click();
-
-  } catch (err) {
-    console.error(err);
-    alert("Error downloading/decrypting file: " + err.message);
-  }
-}
-
-// Delete file
-async function deleteFile(fileName, rowElement) {
-  const originalName = fileName.replace(/\.enc$/i, "");
-  encryptedFiles = encryptedFiles.filter(f => f.fileName !== originalName);
-  localStorage.setItem("encryptedFiles", JSON.stringify(encryptedFiles));
-
-  if (rowElement && rowElement.remove) rowElement.remove();
-
-  try {
-    const res = await fetch(`${backendURL}/delete/${encodeURIComponent(fileName)}`, { method: 'DELETE' });
-    const data = await res.json();
-    console.log('Delete response:', data);
-    alert(data.message);
-  } catch (err) {
-    console.error(err);
-    alert("Error deleting file from server");
-  }
 }
 
 // Upload files
@@ -145,16 +86,23 @@ document.getElementById("uploadBtn").addEventListener("click", () => {
 
   input.addEventListener("change", async () => {
     await masterReady;
-
     const formData = new FormData();
 
     for (const file of input.files) {
       addFileToTable(file.name, "Pending");
-
       try {
         const encryptedFile = await encryptFile(file);
         const encryptedBlob = new Blob([encryptedFile.encrypted], { type: "application/octet-stream" });
         formData.append('files', encryptedBlob, file.name + ".enc");
+
+        // Temporarily store metadata with unknown storedName, will update after server response
+        encryptedFiles.push({
+          fileName: file.name,
+          iv: Array.from(encryptedFile.iv),
+          salt: Array.from(encryptedFile.salt),
+          storedName: null
+        });
+
       } catch (err) {
         console.error("Encryption failed for", file.name, err);
         alert("Encryption failed for " + file.name);
@@ -162,21 +110,24 @@ document.getElementById("uploadBtn").addEventListener("click", () => {
     }
 
     try {
-      console.log('Uploading encrypted files to backend...');
-      const res = await fetch(`${backendURL}/upload`, { method: 'POST', body: formData });
+      const res = await fetch(`${backendURL}/upload`, { method: "POST", body: formData });
       if (!res.ok) throw new Error(`Upload failed. Status: ${res.status}`);
-
       const data = await res.json();
-      console.log('Upload response data:', data);
 
       if (Array.isArray(data.files)) {
-        data.files.forEach(encName => {
-          const originalName = encName.replace(/\.enc$/i, "");
-          const items = document.querySelectorAll('.file-item');
+        // Update storedName for each file in metadata
+        data.files.forEach(fileMap => {
+          const meta = encryptedFiles.find(f => f.fileName === fileMap.original);
+          if (meta) meta.storedName = fileMap.stored;
+        });
+
+        // Update UI statuses
+        data.files.forEach(fileMap => {
+          const items = document.querySelectorAll(".file-item");
           for (const item of items) {
-            const nameEl = item.querySelector('.file-name');
-            const metaEl = item.querySelector('.file-meta');
-            if (nameEl && metaEl && nameEl.textContent === originalName && metaEl.textContent === "Pending") {
+            const nameEl = item.querySelector(".file-name");
+            const metaEl = item.querySelector(".file-meta");
+            if (nameEl && metaEl && nameEl.textContent === fileMap.original && metaEl.textContent === "Pending") {
               metaEl.textContent = "Uploaded";
               metaEl.className = "file-meta status-success";
             }
@@ -184,15 +135,72 @@ document.getElementById("uploadBtn").addEventListener("click", () => {
         });
       }
 
+      localStorage.setItem("encryptedFiles", JSON.stringify(encryptedFiles));
       alert(data.message);
+
     } catch (err) {
-      console.error('Upload error:', err);
+      console.error("Upload error:", err);
       alert(`Error uploading files to server: ${err.message}`);
     }
   });
 
   input.click();
 });
+
+// Download file
+async function downloadFile(fileName) {
+  try {
+    const meta = encryptedFiles.find(f => f.fileName === fileName);
+    if (!meta || !meta.storedName) throw new Error("File metadata missing");
+
+    const res = await fetch(`${backendURL}/download/${encodeURIComponent(meta.storedName)}`);
+    if (!res.ok) throw new Error("File not found on server");
+
+    const encryptedBuffer = await res.arrayBuffer();
+
+    await masterReady;
+    const key = await deriveFileKey(meta.fileName, new Uint8Array(meta.salt));
+    const decrypted = await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv: new Uint8Array(meta.iv) },
+      key,
+      encryptedBuffer
+    );
+
+    const blob = new Blob([decrypted]);
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = meta.fileName;
+    a.click();
+
+  } catch (err) {
+    console.error(err);
+    alert("Error downloading/decrypting file: " + err.message);
+  }
+}
+
+// Delete file
+async function deleteFile(fileName, rowElement) {
+  const metaIndex = encryptedFiles.findIndex(f => f.fileName === fileName);
+  if (metaIndex === -1) return;
+
+  const meta = encryptedFiles[metaIndex];
+  encryptedFiles.splice(metaIndex, 1);
+  localStorage.setItem("encryptedFiles", JSON.stringify(encryptedFiles));
+
+  if (rowElement && rowElement.remove) rowElement.remove();
+
+  if (!meta.storedName) return;
+
+  try {
+    const res = await fetch(`${backendURL}/delete/${encodeURIComponent(meta.storedName)}`, { method: "DELETE" });
+    const data = await res.json();
+    console.log("Delete response:", data);
+    alert(data.message);
+  } catch (err) {
+    console.error(err);
+    alert("Error deleting file from server");
+  }
+}
 
 // Login
 document.getElementById("loginBtn").addEventListener("click", () => {
@@ -206,17 +214,13 @@ document.getElementById("loginBtn").addEventListener("click", () => {
   })
   .then(res => res.json())
   .then(data => alert(data.message))
-  .catch(err => console.error('Login error:', err));
+  .catch(err => console.error("Login error:", err));
 });
 
 // Initialize master key and populate UI
 masterReady = importMasterKey();
-masterReady
-  .then(() => {
-    for (const meta of encryptedFiles) {
-      addFileToTable(meta.fileName, "Uploaded");
-    }
-  })
-  .catch(err => {
-    console.error("Failed to import master key:", err);
-  });
+masterReady.then(() => {
+  for (const meta of encryptedFiles) {
+    addFileToTable(meta.fileName, "Uploaded");
+  }
+}).catch(err => console.error("Failed to import master key:", err));
