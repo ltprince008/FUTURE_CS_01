@@ -4,7 +4,9 @@ const fs = require('fs');
 const multer = require('multer');
 
 const app = express();
-const port = 5000;
+// new
+const port = process.env.PORT || 5000;
+
 
 // Ensure uploads folder exists inside backend/
 const uploadDir = path.join(__dirname, 'uploads');
@@ -76,7 +78,7 @@ app.delete('/delete/:filename', (req, res) => {
     fs.unlinkSync(filePath);
     res.json({ message: 'File deleted successfully' });
   } else {
-    res.status(404).json({ message: 'File not found' });
+    res.status(405).json({ message: 'File not found' });
   }
 });
 
