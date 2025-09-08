@@ -1,0 +1,2 @@
+This is a demo example file for testing the SOC File Portal.
+You can replace this with any simple text file to test upload/download.
