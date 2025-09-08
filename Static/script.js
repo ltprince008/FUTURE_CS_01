@@ -1,9 +1,11 @@
 // script.js
 
 // Deployment-safe backend URL
-const backendURL = window.location.hostname === "localhost"
-  ? "http://localhost:5000"
-  : window.location.origin; // automatically uses deployed site origin
+// Deployment-safe backend URL
+const backendURL = window.location.hostname === "localhost" 
+  ? "http://localhost:5000" 
+  : "https://future-cs-01.onrender.com";
+// automatically uses deployed site origin
 
 // Master key for HKDF-derived per-file keys (demo, in-memory)
 const masterKeyRaw = new TextEncoder().encode("SuperSecretMasterKey123!");
