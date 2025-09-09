@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Secure Share Vibe</title>
   <link rel="stylesheet" href="style.css" />
 </head>
+
 <body>
 
   <!-- Header -->
@@ -13,7 +15,6 @@
     <div class="header-content container">
       <a href="#" class="logo">Secure Share Vibe</a>
       <nav class="nav">
-        <!-- Added IDs for JS -->
         <a href="#" class="btn btn-primary" id="loginBtn">Login</a>
         <a href="#" class="btn btn-secondary" id="signupBtn">Sign Up</a>
       </nav>
@@ -26,10 +27,9 @@
     <!-- Upload Section -->
     <section class="hero">
       <div class="upload-zone">
-        <div class="upload-icon"></div> <!-- Use SVG icon here later -->
+        <div class="upload-icon"></div>
         <h2>Secure File Upload</h2>
         <p class="hero-subtitle">AES-GCM encryption and HKDF key derivation for each file. Your files are safe and private.</p>
-        <!-- Added ID for JS -->
         <button class="btn btn-primary" id="uploadBtn">Upload File</button>
       </div>
     </section>
@@ -38,44 +38,7 @@
     <section class="mt-12">
       <h3 class="mb-4">Recent Files</h3>
       <div class="file-list">
-
-        <!-- File Item -->
-        <div class="file-item">
-          <div class="file-icon"></div> <!-- Placeholder for PDF icon SVG -->
-          <div class="file-info">
-            <div class="file-name">document.pdf</div>
-            <div class="file-meta">Uploaded on 07-09-2025</div>
-          </div>
-          <div class="file-actions">
-            <button class="file-action" aria-label="Download document.pdf">Download</button>
-            <button class="file-action" aria-label="Delete document.pdf" style="color: var(--error)">Delete</button>
-          </div>
-        </div>
-
-        <div class="file-item">
-          <div class="file-icon"></div> <!-- Placeholder for image icon SVG -->
-          <div class="file-info">
-            <div class="file-name">image.png</div>
-            <div class="file-meta">Uploaded on 06-09-2025</div>
-          </div>
-          <div class="file-actions">
-            <button class="file-action" aria-label="Download image.png">Download</button>
-            <button class="file-action" aria-label="Delete image.png" style="color: var(--error)">Delete</button>
-          </div>
-        </div>
-
-        <div class="file-item">
-          <div class="file-icon"></div> <!-- Placeholder for presentation icon SVG -->
-          <div class="file-info">
-            <div class="file-name">presentation.pptx</div>
-            <div class="file-meta">Uploaded on 05-09-2025</div>
-          </div>
-          <div class="file-actions">
-            <button class="file-action" aria-label="Download presentation.pptx">Download</button>
-            <button class="file-action" aria-label="Delete presentation.pptx" style="color: var(--error)">Delete</button>
-          </div>
-        </div>
-
+        <!-- Files will be dynamically injected here by script.js -->
       </div>
     </section>
 
@@ -90,4 +53,5 @@
   <script src="script.js"></script>
 
 </body>
+
 </html>
