@@ -11,7 +11,6 @@ const port = process.env.PORT || 5000;
 app.use(cors());
 
 // ✅ Use Render persistent disk
-// On Render, `/mnt/data` is a persistent folder
 const uploadDir = process.env.RENDER_PERSISTENT_DIR
   ? path.join(process.env.RENDER_PERSISTENT_DIR, 'uploads')
   : path.join(__dirname, 'uploads');
@@ -52,14 +51,21 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '../templates/index.html'));
 });
 
-// Upload route
+// ✅ Upload route (updated)
 app.post('/upload', upload.array('files'), (req, res) => {
   console.log('Files uploaded:', req.files);
   if (!req.files || req.files.length === 0)
     return res.status(400).json({ message: 'No files uploaded' });
 
-  const uploadedFiles = req.files.map(f => f.filename);
-  res.json({ message: 'Files uploaded successfully!', files: uploadedFiles });
+  const uploadedFiles = req.files.map(f => ({
+    original: f.originalname,
+    stored: f.filename
+  }));
+
+  res.json({
+    message: 'Files uploaded successfully!',
+    files: uploadedFiles
+  });
 });
 
 // Download route

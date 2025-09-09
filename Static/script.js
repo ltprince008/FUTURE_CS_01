@@ -87,6 +87,7 @@ document.getElementById("uploadBtn").addEventListener("click", () => {
   input.addEventListener("change", async () => {
     await masterReady;
     const formData = new FormData();
+    const pendingMetas = [];
 
     for (const file of input.files) {
       addFileToTable(file.name, "Pending");
@@ -95,8 +96,8 @@ document.getElementById("uploadBtn").addEventListener("click", () => {
         const encryptedBlob = new Blob([encryptedFile.encrypted], { type: "application/octet-stream" });
         formData.append('files', encryptedBlob, file.name + ".enc");
 
-        // Temporarily store metadata with unknown storedName, will update after server response
-        encryptedFiles.push({
+        // Temporarily store metadata, update later after server response
+        pendingMetas.push({
           fileName: file.name,
           iv: Array.from(encryptedFile.iv),
           salt: Array.from(encryptedFile.salt),
@@ -115,19 +116,22 @@ document.getElementById("uploadBtn").addEventListener("click", () => {
       const data = await res.json();
 
       if (Array.isArray(data.files)) {
-        // Update storedName for each file in metadata
-        data.files.forEach(fileMap => {
-          const meta = encryptedFiles.find(f => f.fileName === fileMap.original);
-          if (meta) meta.storedName = fileMap.stored;
+        // Map stored filenames 1-to-1 with local pendingMetas
+        data.files.forEach((storedName, idx) => {
+          if (pendingMetas[idx]) {
+            pendingMetas[idx].storedName = storedName;
+          }
         });
 
+        encryptedFiles.push(...pendingMetas);
+
         // Update UI statuses
-        data.files.forEach(fileMap => {
+        pendingMetas.forEach(meta => {
           const items = document.querySelectorAll(".file-item");
           for (const item of items) {
             const nameEl = item.querySelector(".file-name");
             const metaEl = item.querySelector(".file-meta");
-            if (nameEl && metaEl && nameEl.textContent === fileMap.original && metaEl.textContent === "Pending") {
+            if (nameEl && metaEl && nameEl.textContent === meta.fileName && metaEl.textContent === "Pending") {
               metaEl.textContent = "Uploaded";
               metaEl.className = "file-meta status-success";
             }
