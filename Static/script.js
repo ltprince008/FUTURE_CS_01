@@ -116,10 +116,10 @@ document.getElementById("uploadBtn").addEventListener("click", () => {
       const data = await res.json();
 
       if (Array.isArray(data.files)) {
-        // Map stored filenames 1-to-1 with local pendingMetas
-        data.files.forEach((storedName, idx) => {
-          if (pendingMetas[idx]) {
-            pendingMetas[idx].storedName = storedName;
+        // ✅ Map server response objects to local metas
+        data.files.forEach((fileObj, idx) => {
+          if (pendingMetas[idx] && fileObj.stored) {
+            pendingMetas[idx].storedName = fileObj.stored;
           }
         });
 

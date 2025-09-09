@@ -51,11 +51,18 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '../templates/index.html'));
 });
 
-// ✅ Upload route (updated)
+// ✅ Upload route with logging
 app.post('/upload', upload.array('files'), (req, res) => {
-  console.log('Files uploaded:', req.files);
-  if (!req.files || req.files.length === 0)
+  if (!req.files || req.files.length === 0) {
+    console.log('⚠️ No files uploaded');
     return res.status(400).json({ message: 'No files uploaded' });
+  }
+
+  console.log('✅ Files uploaded:', req.files.map(f => ({
+    original: f.originalname,
+    stored: f.filename,
+    path: f.path
+  })));
 
   const uploadedFiles = req.files.map(f => ({
     original: f.originalname,
@@ -68,26 +75,49 @@ app.post('/upload', upload.array('files'), (req, res) => {
   });
 });
 
-// Download route
+// ✅ Download route with logging (auto-check .enc if missing)
 app.get('/download/:filename', (req, res) => {
-  const filePath = path.join(uploadDir, req.params.filename);
+  let filePath = path.join(uploadDir, req.params.filename);
+
+  // If file without .enc is requested but only .enc exists
+  if (!fs.existsSync(filePath) && !req.params.filename.endsWith('.enc')) {
+    const encPath = filePath + '.enc';
+    if (fs.existsSync(encPath)) filePath = encPath;
+  }
+
+  console.log('📥 Download request for:', req.params.filename);
+  console.log('🔍 Resolved path:', filePath);
+
   if (fs.existsSync(filePath)) {
+    console.log('✅ File found, sending:', filePath);
     res.download(filePath);
   } else {
+    console.log('❌ File not found on server:', filePath);
     res.status(404).json({ message: 'File not found' });
   }
 });
 
-// Delete route
+// ✅ Delete route with logging (auto-check .enc too)
 app.delete('/delete/:filename', (req, res) => {
-  const filePath = path.join(uploadDir, req.params.filename);
+  let filePath = path.join(uploadDir, req.params.filename);
+
+  // If file without .enc is requested but only .enc exists
+  if (!fs.existsSync(filePath) && !req.params.filename.endsWith('.enc')) {
+    const encPath = filePath + '.enc';
+    if (fs.existsSync(encPath)) filePath = encPath;
+  }
+
+  console.log('🗑 Delete request for:', req.params.filename);
+
   if (fs.existsSync(filePath)) {
     fs.unlinkSync(filePath);
+    console.log('✅ File deleted:', filePath);
     res.json({ message: 'File deleted successfully' });
   } else {
+    console.log('❌ File not found (delete):', filePath);
     res.status(404).json({ message: 'File not found' });
   }
 });
 
 // Start server
-app.listen(port, () => console.log(`Server running on port ${port}`));
+app.listen(port, () => console.log(`🚀 Server running on port ${port}`));
